@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14172b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Player">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Mein Player</title>
+<style>
+:root{--bg:#14172b;--panel:#1c2040;--line:#2b3060;--text:#e8ebff;--mute:#8b92c4;--accent:#ffd166;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 "Avenir Next","Segoe UI",system-ui,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#warn{background:#5a2d3a;padding:10px 16px;font-size:14px}
+#warn code{background:#00000040;padding:1px 6px;border-radius:4px}
+header{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid var(--line)}
+h1{margin:0;font:italic 22px Georgia,"Times New Roman",serif}
+#f{display:flex;gap:8px;flex:1;min-width:260px}
+#url{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text)}
+#f button,.ctl button,.bar button{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px}
+#f button:hover,.ctl button:hover,.bar button:hover{border-color:var(--accent)}
+main{display:grid;grid-template-columns:minmax(300px,480px) 1fr;gap:24px;padding:20px;max-width:1200px;margin:0 auto}
+@media(max-width:800px){main{grid-template-columns:1fr}}
+#stage{aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+#stage iframe{width:100%;height:100%;border:0}
+#now{margin:16px 0 4px}
+#ttl{display:block;font:24px/1.2 Georgia,"Times New Roman",serif}
+#st{display:block;color:var(--mute);min-height:1.4em;margin-top:4px}
+.ctl{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.ctl svg{width:20px;height:20px;fill:currentColor;display:block}
+.ctl button{display:flex;align-items:center;padding:8px 12px}
+.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--mute)}
+#list{list-style:none;margin:0;padding:0;max-height:calc(100vh - 150px);overflow:auto}
+@media(max-width:800px){#list{max-height:none}}
+#list li{display:flex;gap:12px;align-items:center;padding:6px 8px;border-radius:8px;border-left:3px solid transparent}
+#list li:hover{background:var(--panel)}
+#list li.cur{border-left-color:var(--accent);background:var(--panel)}
+#list img{width:64px;height:36px;object-fit:cover;border-radius:4px;background:var(--line);cursor:pointer}
+.tx{flex:1;min-width:0;cursor:pointer}
+.tx b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx small{color:var(--mute);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#list li button{background:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;color:var(--mute);font-size:13px}
+#list li button:hover{color:var(--text);border-color:var(--accent)}
+#list li.hid{background:repeating-linear-gradient(135deg,transparent 0 6px,#ffffff08 6px 12px)}
+#list li.hid img,#list li.hid .tx{opacity:.4}
+#list li.hid b{text-decoration:line-through}
+.empty{color:var(--mute);padding:24px 0}
+body{padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+@media(max-width:800px){
+  header{padding:12px}
+  main{padding:12px;gap:12px}
+  main>section:first-child{position:sticky;top:0;z-index:5;background:var(--bg);padding-bottom:8px}
+  #stage{max-width:300px;margin:0 auto}
+  #now{margin-top:10px}
+  #ttl{font-size:19px}
+  .ctl button{min-height:44px}
+  #list li{padding:8px 4px}
+  #list li button{min-height:40px}
+  #list img{width:72px;height:40px}
+}
+</style>
+</head>
+<body>
+<div id="warn" hidden>Die Seite wurde als Datei geöffnet, daher blockiert YouTube die Wiedergabe (Fehler 153). Starte einen lokalen Server mit <code>python3 -m http.server 8000</code> und öffne <code>http://localhost:8000</code>.</div>
+<header>
+  <h1>Mein Player</h1>
+  <form id="f"><input id="url" placeholder="Link zur YouTube-Music-Playlist einfügen" autocomplete="off"><button>Laden</button></form>
+</header>
+<main>
+  <section>
+    <div id="stage"><div id="yt"></div></div>
+    <div id="now"><b id="ttl">Noch nichts geladen</b><span id="st">Playlist muss öffentlich oder nicht gelistet sein.</span></div>
+    <div class="ctl">
+      <button id="prev" aria-label="Zurück"><svg viewBox="0 0 24 24"><path d="M18 6l-8.5 6 8.5 6zM6 6h2v12H6z"/></svg></button>
+      <button id="pp" aria-label="Wiedergabe"><svg viewBox="0 0 24 24"><path id="ppi" d="M8 5v14l11-7z"/></svg></button>
+      <button id="next" aria-label="Weiter"><svg viewBox="0 0 24 24"><path d="M6 6l8.5 6L6 18zM16 6h2v12h-2z"/></svg></button>
+      <button id="shuf">Neu mischen</button>
+    </div>
+  </section>
+  <section>
+    <div class="bar"><span id="cnt"></span><button id="showall">Alle einblenden</button></div>
+    <ul id="list"><li class="empty">Füge oben einen Playlist-Link ein.</li></ul>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+};
+
+let player, tracks = [], hidden = new Set(), queue = [], pos = -1, plId = '', errRun = 0, loadErr = false;
+let titles = {};
+try { titles = JSON.parse(store.get('ytm:titles') || '{}'); } catch(e){}
+
+if (location.protocol === 'file:') $('#warn').hidden = false;
+
+const apiReady = new Promise(res => {
+  window.onYouTubeIframeAPIReady = res;
+  const s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(s);
+});
+
+setTimeout(() => {
+  if (!window.YT || !YT.Player) {
+    $('#warn').innerHTML = 'Das YouTube-Skript konnte nicht geladen werden. Öffne die Seite in einem normalen Desktop-Browser (nicht in der App-Vorschau) über <code>http://localhost:8000</code> und schalte Werbeblocker für diese Seite aus.';
+    $('#warn').hidden = false;
+    status('YouTube-Player nicht verfügbar.');
+  }
+}, 6000);
+
+const parseId = s => {
+  const m = s.match(/[?&]list=([\w-]+)/);
+  return m ? m[1] : (/^[\w-]{13,}$/.test(s.trim()) ? s.trim() : null);
+};
+const status = m => $('#st').textContent = m;
+
+async function loadPlaylist(id){
+  plId = id; tracks = []; queue = []; pos = -1; render();
+  status('Playlist wird geladen …');
+  await apiReady;
+  if (player) { try { player.destroy(); } catch(e){} }
+  $('#stage').innerHTML = '<div id="yt"></div>';
+  const vars = { listType:'playlist', list:id, playsinline:1 };
+  if (location.protocol.startsWith('http')) vars.origin = location.origin;
+  loadErr = false;
+  status('Player wird gestartet …');
+  const ready = await Promise.race([
+    new Promise(res => {
+      player = new YT.Player('yt', { width:'100%', height:'100%', playerVars:vars,
+        events:{ onReady:() => res(true), onStateChange:onState, onError:onErr } });
+    }),
+    sleep(10000).then(() => false)
+  ]);
+  if (!ready) { status('Der YouTube-Player startet nicht. Läuft die Seite über http://localhost?'); return; }
+  status('Titelliste wird gelesen …');
+  let ids = await readList();
+  if (!ids.length && !loadErr) {
+    player.mute(); player.playVideo();
+    ids = await readList();
+    player.pauseVideo(); player.unMute();
+  }
+  if (!ids.length) {
+    if (!loadErr) status('Titelliste nicht lesbar. Ist die Playlist öffentlich oder nicht gelistet? Mixe und automatische Radios gehen nicht.');
+    return;
+  }
+  tracks = ids.map(v => ({ id:v, title:(titles[v]||{}).t || null, artist:(titles[v]||{}).a || '' }));
+  try { hidden = new Set(JSON.parse(store.get('ytm:h:' + id) || '[]')); } catch(e){ hidden = new Set(); }
+  store.set('ytm:last', id);
+  shuffle(); render();
+  status(tracks.length + ' Titel geladen');
+  step(1);
+  fetchTitles(id);
+}
+
+async function readList(){
+  for (let i = 0; i < 25 && !loadErr; i++) {
+    const p = player.getPlaylist && player.getPlaylist();
+    if (p && p.length) return p;
+    await sleep(400);
+  }
+  return [];
+}
+
+async function fetchTitles(id){
+  const todo = tracks.filter(t => !t.title);
+  for (let i = 0; i < todo.length; i += 6) {
+    if (plId !== id) return;
+    await Promise.all(todo.slice(i, i + 6).map(async t => {
+      try {
+        const r = await fetch('https://noembed.com/embed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + t.id));
+        const j = await r.json();
+        if (j.title) { t.title = j.title; t.artist = j.author_name || ''; titles[t.id] = { t:t.title, a:t.artist }; }
+      } catch(e){}
+    }));
+    render();
+  }
+  store.set('ytm:titles', JSON.stringify(titles));
+}
+
+function shuffle(){
+  queue = tracks.map(t => t.id);
+  for (let i = queue.length - 1; i > 0; i--) {
+    const j = Math.random() * (i + 1) | 0;
+    [queue[i], queue[j]] = [queue[j], queue[i]];
+  }
+  pos = -1;
+}
+
+function step(dir){
+  if (!tracks.length) return;
+  if (tracks.every(t => hidden.has(t.id))) { status('Alle Titel sind ausgeblendet.'); player.pauseVideo(); return; }
+  let p = pos;
+  do {
+    p += dir;
+    if (p >= queue.length) { shuffle(); p = 0; }
+    if (p < 0) { player.seekTo(0); return; }
+  } while (hidden.has(queue[p]));
+  play(p);
+}
+
+function play(p){
+  pos = p;
+  player.loadVideoById(queue[p]);
+  render();
+}
+
+function toggle(id){
+  const wasHidden = hidden.has(id);
+  wasHidden ? hidden.delete(id) : hidden.add(id);
+  store.set('ytm:h:' + plId, JSON.stringify([...hidden]));
+  render();
+  if (!wasHidden && queue[pos] === id) step(1);
+}
+
+function render(){
+  const list = $('#list');
+  if (!tracks.length) { $('#cnt').textContent = ''; return; }
+  const n = tracks.filter(t => hidden.has(t.id)).length;
+  $('#cnt').textContent = (tracks.length - n) + ' von ' + tracks.length + ' Titeln aktiv';
+  list.innerHTML = tracks.map((t, i) => {
+    const h = hidden.has(t.id), cur = queue[pos] === t.id;
+    return `<li class="${h ? 'hid' : ''} ${cur ? 'cur' : ''}" data-id="${t.id}">
+      <img loading="lazy" src="https://i.ytimg.com/vi/${t.id}/mqdefault.jpg" alt="" data-act="play">
+      <div class="tx" data-act="play"><b>${esc(t.title || 'Titel ' + (i + 1))}</b><small>${esc(t.artist)}</small></div>
+      <button data-act="hide">${h ? 'Einblenden' : 'Ausblenden'}</button></li>`;
+  }).join('');
+}
+
+function onState(e){
+  const S = YT.PlayerState;
+  if (e.data === S.ENDED) step(1);
+  if (e.data === S.PLAYING) {
+    errRun = 0;
+    const d = player.getVideoData();
+    $('#ttl').textContent = d.title || '';
+    document.title = d.title || 'Mein Player';
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title:d.title || '', artist:d.author || '',
+        artwork:[{ src:'https://i.ytimg.com/vi/' + d.video_id + '/mqdefault.jpg', sizes:'320x180', type:'image/jpeg' }] });
+    }
+    const t = tracks.find(x => x.id === d.video_id);
+    if (t && !t.title) { t.title = d.title; t.artist = d.author; render(); }
+  }
+  $('#ppi').setAttribute('d', e.data === S.PLAYING ? 'M6 5h4v14H6zM14 5h4v14h-4z' : 'M8 5v14l11-7z');
+}
+
+function onErr(e){
+  if (!tracks.length) {
+    loadErr = true;
+    status({2:'Ungültiger Playlist-Link.',100:'Playlist nicht gefunden oder privat.',101:'Einbetten ist für diese Playlist gesperrt.',150:'Einbetten ist für diese Playlist gesperrt.',153:'Fehler 153: Seite über http://localhost öffnen, nicht als Datei.'}[e.data] || 'YouTube-Fehler ' + e.data);
+    return;
+  }
+  if (e.data === 153 && location.protocol === 'file:') { $('#warn').hidden = false; return; }
+  if (++errRun > 5) { status('Mehrere Titel in Folge nicht abspielbar. Wiedergabe gestoppt.'); return; }
+  status('Titel nicht abspielbar, springe weiter …');
+  setTimeout(() => step(1), 700);
+}
+
+$('#f').onsubmit = e => {
+  e.preventDefault();
+  const id = parseId($('#url').value);
+  id ? loadPlaylist(id) : status('Kein gültiger Playlist-Link erkannt.');
+};
+$('#list').onclick = e => {
+  const li = e.target.closest('li[data-id]'), a = e.target.closest('[data-act]');
+  if (!li || !a) return;
+  const id = li.dataset.id;
+  if (a.dataset.act === 'hide') toggle(id);
+  else play(queue.indexOf(id));
+};
+$('#prev').onclick = () => step(-1);
+$('#next').onclick = () => step(1);
+$('#shuf').onclick = () => { shuffle(); step(1); };
+$('#pp').onclick = () => {
+  if (!player || !player.getPlayerState) return;
+  player.getPlayerState() === YT.PlayerState.PLAYING ? player.pauseVideo() : player.playVideo();
+};
+$('#showall').onclick = () => {
+  hidden.clear();
+  store.set('ytm:h:' + plId, '[]');
+  render();
+};
+
+if ('mediaSession' in navigator) {
+  const acts = { previoustrack:() => step(-1), nexttrack:() => step(1),
+    play:() => player && player.playVideo(), pause:() => player && player.pauseVideo() };
+  for (const k in acts) { try { navigator.mediaSession.setActionHandler(k, acts[k]); } catch(e){} }
+}
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+const last = store.get('ytm:last');
+if (last) $('#url').value = last;
+</script>
+</body>
+</html>
